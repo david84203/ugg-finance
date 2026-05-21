@@ -70,7 +70,22 @@ function aggregateFirebase(sessions, transactions, rentals, extraIncomeItems) {
   for (const r of rentals) addToDay(r.date, r.amount || 0);
   for (const e of extraIncomeItems) addToDay(e.date, e.amount || 0);
 
-  return { entryFee, memberFee, rental, sale: sale + inStoreSale, escape, food, extra, dailyMap, sessionCount: sessions.length };
+  // 人次統計
+  const weekdayCount  = sessions.filter(s => !s.isWeekend).length;
+  const weekendCount  = sessions.filter(s =>  s.isWeekend).length;
+  // 遊戲統計
+  const newMemberCount = transactions.filter(t => t.type === 'membershipFee').length;
+  const saleCount      = transactions.filter(t => t.type === 'sale').length;
+  const rentalCount    = rentals.reduce((sum, r) => {
+    const gamesArr = r.games?.values;
+    return sum + (Array.isArray(gamesArr) ? gamesArr.length : 1);
+  }, 0);
+
+  return {
+    entryFee, memberFee, rental, sale: sale + inStoreSale, escape, food, extra,
+    dailyMap, sessionCount: sessions.length,
+    weekdayCount, weekendCount, newMemberCount, saleCount, rentalCount,
+  };
 }
 
 export async function GET(request) {
@@ -97,7 +112,9 @@ export async function GET(request) {
 
     let entryFee = 0, memberFee = 0, rental = 0, sale = 0, escape = 0, food = 0, extra = 0;
     let dailyMap = {};
-    let sessionCount = 0;
+    let sessionCount = 0, weekdayCount = 0, weekendCount = 0;
+    let newMemberCount = 0, saleCount = 0, rentalCount = 0;
+    let hasDetailedStats = false;
     let extraIncomeItems = [];
     let todayRevenue = 0;
     let todayBreakdown = null;
@@ -123,7 +140,9 @@ export async function GET(request) {
         .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
       const agg = aggregateFirebase(sessions, transactions, rentals, extraIncomeItems);
-      ({ entryFee, memberFee, rental, sale, escape, food, extra, dailyMap, sessionCount } = agg);
+      ({ entryFee, memberFee, rental, sale, escape, food, extra, dailyMap, sessionCount,
+         weekdayCount, weekendCount, newMemberCount, saleCount, rentalCount } = agg);
+      hasDetailedStats = true;
 
       // 背景同步回 Sheet
       triggerSheetSync(year, month, agg.dailyMap);
@@ -176,7 +195,13 @@ export async function GET(request) {
       food      = sheetAgg.food      + fbAgg.food;
       extra     = sheetAgg.extra     + fbAgg.extra;
       dailyMap  = { ...sheetAgg.dailyMap, ...fbAgg.dailyMap };
-      sessionCount = fbAgg.sessionCount;
+      sessionCount   = fbAgg.sessionCount;
+      weekdayCount   = fbAgg.weekdayCount;
+      weekendCount   = fbAgg.weekendCount;
+      newMemberCount = fbAgg.newMemberCount;
+      saleCount      = fbAgg.saleCount;
+      rentalCount    = fbAgg.rentalCount;
+      hasDetailedStats = true;
 
       // 背景同步 Firebase 部分（5/11 後）回 Sheet
       triggerSheetSync(year, month, fbAgg.dailyMap);
@@ -224,6 +249,9 @@ export async function GET(request) {
       monthExpense:    Math.round(monthExpense),
       monthProfit:     Math.round(monthRevenue - monthExpense),
       sessionCount,
+      weekdayCount, weekendCount,
+      newMemberCount, saleCount, rentalCount,
+      hasDetailedStats,
       dailyRevenue,
       revenueBreakdown,
       extraIncomeItems: extraIncomeItems.map(e => ({

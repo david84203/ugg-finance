@@ -1,0 +1,17 @@
+{
+  "name": "烏嘎嘎記帳系統",
+  "short_name": "記帳系統",
+  "description": "烏嘎嘎桌遊店收支記帳系統",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff7ed",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

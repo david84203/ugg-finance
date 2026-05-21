@@ -274,6 +274,16 @@ export default function DashboardTab() {
             <Card label="入場人次" value={`${data.sessionCount} 人`} />
           </div>
 
+          {data.hasDetailedStats && (
+            <Section icon="📊" title="本月營運統計">
+              <Row label="平日入場" value={`${data.weekdayCount} 人`} />
+              <Row label="假日入場" value={`${data.weekendCount} 人`} />
+              <Row label="新增會員" value={`${data.newMemberCount} 人`} />
+              <Row label="出租遊戲" value={`${data.rentalCount} 款`} />
+              <Row label="販售遊戲" value={`${data.saleCount} 筆`} />
+            </Section>
+          )}
+
           <Section icon="📅" title="每日收款明細">
             {data.dailyRevenue.length === 0
               ? <p className="text-sm text-gray-400 py-2 text-center">本月尚無資料</p>
