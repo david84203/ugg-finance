@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { runQuery, getDoc, listDocs, dateRangeFilters, UGG, UGG_KEY, PCC } from '@/lib/firebase';
+import { runQuery, getDoc, listDocs, dateRangeFilters, equalFilter, deleteDocById, UGG, UGG_KEY, PCC } from '@/lib/firebase';
 import { syncMonthToSheet } from '@/lib/sheets';
 
 // 背景同步 Firebase 資料回 Sheet（不阻塞回應）
@@ -106,9 +106,11 @@ export async function GET(request) {
     const allFromFirebase = dateStart >  SHEET_CUTOFF;
     // mixed = 2026/5 月份（1-10 來自 Sheet，11+ 來自 Firebase）
 
-    // 一定要撈的：purchaseCosts（支出）
-    const purchaseCostsDoc = await getDoc(UGG, 'purchaseCosts', monthKey, UGG_KEY);
-    const monthExpense = purchaseCostsDoc?.amount || 0;
+    // 進貨支出：從 purchaseOrders 查詢當月所有明細
+    const purchaseRecordsRaw = await runQuery(UGG, 'purchaseOrders', [equalFilter('monthKey', monthKey)], UGG_KEY);
+    const purchaseRecords = purchaseRecordsRaw
+      .sort((a, b) => (a.orderDate || '').localeCompare(b.orderDate || ''));
+    const monthExpense = purchaseRecords.reduce((s, r) => s + (r.totalAmount || 0), 0);
 
     let entryFee = 0, memberFee = 0, rental = 0, sale = 0, escape = 0, food = 0, extra = 0;
     let dailyMap = {};
@@ -258,9 +260,39 @@ export async function GET(request) {
         id: e.id, date: e.date, category: e.category,
         description: e.description, amount: e.amount,
       })),
+      purchaseRecords: purchaseRecords.map(r => ({
+        id:            r.id,
+        orderId:       r.orderId || '',
+        orderDate:     r.orderDate || '',
+        supplierName:  r.supplierName || '未指定',
+        totalAmount:   r.totalAmount || 0,
+        inventoryCost: r.inventoryCost || 0,
+        openBoxCost:   r.openBoxCost || 0,
+      })),
     });
   } catch (err) {
     console.error('Dashboard error:', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// ── DELETE：刪除進貨明細（同步刪除 purchaseOrders + orders）──
+export async function DELETE(request) {
+  try {
+    const { id, orderId } = await request.json();
+    if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
+
+    // 刪除記帳系統的進貨明細
+    await deleteDocById(UGG, 'purchaseOrders', id);
+
+    // 同步刪除進貨管理系統的訂單紀錄
+    if (orderId) {
+      await deleteDocById(UGG, 'orders', orderId);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('Delete purchase record error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

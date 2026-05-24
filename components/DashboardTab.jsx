@@ -315,11 +315,42 @@ export default function DashboardTab() {
           />
 
           <Section icon="🧾" title="支出明細（進貨）">
-            {data.monthExpense > 0
-              ? <Row label="本月進貨支出" value={fmt(data.monthExpense)} />
-              : <p className="text-sm text-gray-400 py-2 text-center">本月尚無進貨紀錄</p>}
-            <p className="text-xs text-gray-300 pt-1">詳細明細請至倉儲系統查詢</p>
+            {(data.purchaseRecords || []).length === 0
+              ? <p className="text-sm text-gray-400 py-2 text-center">本月尚無進貨紀錄</p>
+              : (data.purchaseRecords || []).map(r => (
+                <div key={r.id} className="flex justify-between items-center py-1.5 border-b border-gray-50 last:border-0">
+                  <div>
+                    <span className="text-sm text-gray-700">{r.supplierName}</span>
+                    <span className="text-xs text-gray-400 ml-1.5">{r.orderDate?.slice(5).replace('-', '/')}</span>
+                    {r.openBoxCost > 0 && (
+                      <span className="text-xs text-orange-400 ml-1.5">開盒 {fmt(r.openBoxCost)}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">{fmt(r.totalAmount)}</span>
+                    <button
+                      type="button"
+                      title="刪除（同步刪除進貨管理系統訂單）"
+                      onClick={async () => {
+                        if (!confirm(`確定刪除 ${r.supplierName}（${r.orderDate}）的進貨紀錄？\n⚠️ 同時會刪除進貨管理系統的訂單，但庫存數量不會回復。`)) return;
+                        await fetch('/api/dashboard', {
+                          method: 'DELETE',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ id: r.id, orderId: r.orderId }),
+                        });
+                        load(year, month);
+                      }}
+                      className="text-gray-300 hover:text-red-400 text-xs transition-colors"
+                    >✕</button>
+                  </div>
+                </div>
+              ))
+            }
+            {(data.purchaseRecords || []).length > 0 && (
+              <Row label="本月合計" value={fmt(data.monthExpense)} highlight />
+            )}
           </Section>
+
         </>
       )}
     </div>
